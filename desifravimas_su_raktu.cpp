@@ -19,51 +19,51 @@
 
 class SubstitutionCipherSolver {
 private:
-    struct KalbosModelis {
-        std::string pavadinimas;
-        std::unordered_map<std::string, double> monogramos;
-        std::unordered_map<std::string, double> bigramos;
-        std::unordered_map<std::string, double> trigramos;
-        std::unordered_set<std::string> zodynas;
+    struct LanguageModel {
+        std::string name;
+        std::unordered_map<std::string, double> monograms;
+        std::unordered_map<std::string, double> bigrams;
+        std::unordered_map<std::string, double> trigrams;
+        std::unordered_set<std::string> dictionary;
     };
 
-    std::vector<KalbosModelis> kalbosModeliai;
+    std::vector<LanguageModel> languageModels;
     std::mt19937 rng;
-    size_t maxTekstoDydis = 100000;
-    size_t minDydis = 5000;
-    int maxIteracijuBePagerinimo = 500;
-    int maxVisoIteraciju = 50000;
-    double pradineTemperatura = 10.0;
-    double galutineTemperatura = 0.01;
-    std::atomic<bool> stabdymas{false};
+    size_t maxTextSize = 100000;
+    size_t minSize = 5000;
+    int maxIterationsWithoutImprovement = 500;
+    int maxTotalIterations = 50000;
+    double initialTemperature = 10.0;
+    double finalTemperature = 0.01;
+    std::atomic<bool> stopFlag{false};
 
-        //Konfigūracijos parametrai
-    struct Konfiguracija {
-        double monogramuSvoris = 1.0;
-        double bigramuSvoris = 2.0;
-        double trigramuSvoris = 4.0;
-        double zodynoSvoris = 3.0;
-        int gijuSk = std::thread::hardware_concurrency();
-        bool naudotiSimuliuotaAtleidima = true;
-        bool naudotiKopimuKala = true;
-        bool naudotiGenetiniAlgoritma = false;
-        int genetinesPopuliacijosDydis = 50;
-        int tekstoTyrimoStrategija = 1; // 0=pradzia, 1=atsitiktine, 2=kelios
-        bool adaptyvusSvoris = true;
-        bool detalusIsvedimas = false;
-    } konfig;
+    // Configuration parameters
+    struct Configuration {
+        double monogramWeight = 1.0;
+        double bigramWeight = 2.0;
+        double trigramWeight = 4.0;
+        double dictionaryWeight = 3.0;
+        int threadCount = std::thread::hardware_concurrency();
+        bool useSimulatedAnnealing = true;
+        bool useHillClimbing = true;
+        bool useGeneticAlgorithm = false;
+        int geneticPopulationSize = 50;
+        int textSamplingStrategy = 1; // 0=beginning, 1=random, 2=multiple
+        bool adaptiveWeight = true;
+        bool verboseOutput = false;
+    } config;
 
 public:
     SubstitutionCipherSolver() : rng(std::chrono::steady_clock::now().time_since_epoch().count()) {
-        inicializuotiKalbosModelius();
+        initializeLanguageModels();
     }
 
-    void inicializuotiKalbosModelius() {
-        KalbosModelis anglu;
-        anglu.pavadinimas = "Anglu";
+    void initializeLanguageModels() {
+        LanguageModel english;
+        english.name = "English";
         
-        //Anglų kalbos raidžių dažnis
-        anglu.monogramos = {
+        // English letter frequencies
+        english.monograms = {
             {"E", 0.1202}, {"T", 0.0910}, {"A", 0.0812}, {"O", 0.0768}, {"I", 0.0731},
             {"N", 0.0695}, {"S", 0.0628}, {"R", 0.0602}, {"H", 0.0592}, {"D", 0.0432},
             {"L", 0.0398}, {"U", 0.0288}, {"C", 0.0271}, {"M", 0.0261}, {"F", 0.0230},
@@ -72,7 +72,7 @@ public:
             {"Z", 0.0007}
         };
 
-        anglu.bigramos = {
+        english.bigrams = {
             {"TH", 2.71}, {"HE", 2.33}, {"IN", 2.03}, {"ER", 1.78}, {"AN", 1.61},
             {"RE", 1.41}, {"ND", 1.32}, {"AT", 1.21}, {"ON", 1.13}, {"NT", 1.12},
             {"HA", 1.08}, {"ES", 1.07}, {"ST", 1.05}, {"EN", 1.04}, {"ED", 1.02},
@@ -83,15 +83,15 @@ public:
             {"VE", 0.68}, {"RA", 0.66}, {"LD", 0.65}, {"UR", 0.64}, {"NO", 0.63}
         };
 
-        anglu.trigramos = {
+        english.trigrams = {
             {"THE", 3.51}, {"AND", 1.59}, {"ING", 1.15}, {"HER", 0.82}, {"HAT", 0.65},
             {"HIS", 0.60}, {"THA", 0.59}, {"ERE", 0.55}, {"FOR", 0.55}, {"ENT", 0.53},
             {"ION", 0.51}, {"TER", 0.46}, {"WAS", 0.46}, {"YOU", 0.44}, {"ITH", 0.43},
             {"VER", 0.43}, {"ALL", 0.42}, {"WIT", 0.40}, {"THI", 0.39}, {"TIO", 0.38}
         };
 
-        //Daugiausiai naudojami žodžiai
-        anglu.zodynas = {
+        // Most common words
+        english.dictionary = {
             "the", "be", "to", "of", "and", "a", "in", "that", "have", "i", "it", "for", "not", "on", "with",
             "he", "as", "you", "do", "at", "this", "but", "his", "by", "from", "they", "we", "say", "her", "she",
             "or", "an", "will", "my", "one", "all", "would", "there", "their", "what", "so", "up", "out", "if", "about",
@@ -101,597 +101,601 @@ public:
             "way", "even", "new", "want", "because", "any", "these", "give", "day", "most", "us"
         };
 
-        kalbosModeliai.push_back(anglu);
+        languageModels.push_back(english);
     }
 
-    void nustatytiKonfiguracija(const Konfiguracija& naujaKonfig) {
-        konfig = naujaKonfig;
+    void setConfiguration(const Configuration& newConfig) {
+        config = newConfig;
     }
 
-    Konfiguracija gautiKonfiguracija() const {
-        return konfig;
+    Configuration getConfiguration() const {
+        return config;
     }
 
-    void nustatytiMaxTekstoDydi(size_t dydis) {
-        maxTekstoDydis = dydis;
+    void setMaxTextSize(size_t size) {
+        maxTextSize = size;
     }
 
-    void prasytiStabdymo() {
-        stabdymas = true;
+    void requestStop() {
+        stopFlag = true;
     }
 
-    std::string desifruotiFaila(const std::string& ivestiesFailas, const std::string& isvestiesFailas, int kalbosModelioIndeksas = 0) {
-        if (kalbosModelioIndeksas < 0 || kalbosModelioIndeksas >= kalbosModeliai.size()) {
-            kalbosModelioIndeksas = 0;
+    std::string decryptFile(const std::string& inputFile, const std::string& outputFile, int languageModelIndex = 0) {
+        if (languageModelIndex < 0 || languageModelIndex >= languageModels.size()) {
+            languageModelIndex = 0;
         }
 
         try {
-            std::string sifruotasTekstas = skaitytiFaila(ivestiesFailas);
-            if (sifruotasTekstas.empty()) {
-                std::cerr << "Klaida: Tuscias ivesties failas arba failas nerastas: " << ivestiesFailas << std::endl;
+            std::string encryptedText = readFile(inputFile);
+            if (encryptedText.empty()) {
+                std::cerr << "Error: Empty input file or file not found: " << inputFile << std::endl;
                 return "";
             }
 
-            auto pradzia = std::chrono::high_resolution_clock::now();
+            auto startTime = std::chrono::high_resolution_clock::now();
 
-            if (konfig.detalusIsvedimas) {
-                std::cout << "Teksto ilgis: " << sifruotasTekstas.size() << " simboliu" << std::endl;
-                std::cout << "Naudojamas kalbos modelis: " << kalbosModeliai[kalbosModelioIndeksas].pavadinimas << std::endl;
-                std::cout << "Pradedamas desifravimas..." << std::endl;
+            if (config.verboseOutput) {
+                std::cout << "Text length: " << encryptedText.size() << " characters" << std::endl;
+                std::cout << "Using language model: " << languageModels[languageModelIndex].name << std::endl;
+                std::cout << "Starting decryption..." << std::endl;
             }
 
-            auto dazniuAnalize = atliktiDazniuAnalize(sifruotasTekstas);
-            auto geriausiasRaktas = sukurtiPradiniRakta(dazniuAnalize, kalbosModelioIndeksas);
-            auto geriausiasIvertinimas = ivertintiDesifravima(sifruotasTekstas, geriausiasRaktas, kalbosModelioIndeksas);
+            auto frequencyAnalysis = performFrequencyAnalysis(encryptedText);
+            auto bestKey = createInitialKey(frequencyAnalysis, languageModelIndex);
+            auto bestScore = evaluateDecryption(encryptedText, bestKey, languageModelIndex);
             
-            if (konfig.detalusIsvedimas) {
-                std::cout << "Pradinis rakto ivercinimas: " << geriausiasIvertinimas << std::endl;
+            if (config.verboseOutput) {
+                std::cout << "Initial key score: " << bestScore << std::endl;
             }
 
-            geriausiasRaktas = optimizuotiRakta(sifruotasTekstas, geriausiasRaktas, kalbosModelioIndeksas);
+            bestKey = optimizeKey(encryptedText, bestKey, languageModelIndex);
             
-             //Iššifravimas su geriausiu raktu
-            std::string desifruotasTekstas = taikytiRakta(sifruotasTekstas, geriausiasRaktas);
+            // Decrypt with the best key
+            std::string decryptedText = applyKey(encryptedText, bestKey);
 
-            rasytiFaila(isvestiesFailas, desifruotasTekstas);
+            writeFile(outputFile, decryptedText);
 
-            auto pabaiga = std::chrono::high_resolution_clock::now();
-            auto trukme = std::chrono::duration_cast<std::chrono::milliseconds>(pabaiga - pradzia).count();
+            auto endTime = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
-            if (konfig.detalusIsvedimas) {
-                std::cout << "Desifravimas baigtas per " << trukme / 1000.0 << " sekundziu" << std::endl;
-                std::cout << "Desifruotas tekstas irasytas i: " << isvestiesFailas << std::endl;
+            if (config.verboseOutput) {
+                std::cout << "Decryption completed in " << duration / 1000.0 << " seconds" << std::endl;
+                std::cout << "Decrypted text written to: " << outputFile << std::endl;
                 
-                std::cout << "Galutinis rakto atvaizdavimas:" << std::endl;
-                for (const auto& pora : geriausiasRaktas) {
-                    std::cout << pora.first << " -> " << pora.second << "  ";
+                std::cout << "Final key mapping:" << std::endl;
+                for (const auto& pair : bestKey) {
+                    std::cout << pair.first << " -> " << pair.second << "  ";
                 }
                 std::cout << std::endl;
             }
 
-            return desifruotasTekstas;
+            return decryptedText;
         }
         catch (const std::exception& e) {
-            std::cerr << "Klaida desifruojant: " << e.what() << std::endl;
+            std::cerr << "Error decrypting: " << e.what() << std::endl;
             return "";
         }
     }
 
 private:
-    std::string skaitytiFaila(const std::string& failoVardas) {
-        std::ifstream failas(failoVardas, std::ios::binary);
-        if (!failas) {
-            throw std::runtime_error("Nepavyko atidaryti failo: " + failoVardas);
+    std::string readFile(const std::string& filename) {
+        std::ifstream file(filename, std::ios::binary);
+        if (!file) {
+            throw std::runtime_error("Failed to open file: " + filename);
         }
 
-        //Gauti failo dydį
-        failas.seekg(0, std::ios::end);
-        size_t failoDydis = failas.tellg();
-        failas.seekg(0, std::ios::beg);
+        // Get file size
+        file.seekg(0, std::ios::end);
+        size_t fileSize = file.tellg();
+        file.seekg(0, std::ios::beg);
 
-        std::string turinys;
-        turinys.resize(failoDydis);
-        failas.read(&turinys[0], failoDydis);
+        std::string content;
+        content.resize(fileSize);
+        file.read(&content[0], fileSize);
         
-        return turinys;
+        return content;
     }
 
-    void rasytiFaila(const std::string& failoVardas, const std::string& turinys) {
-        std::ofstream failas(failoVardas);
-        if (!failas) {
-            throw std::runtime_error("Nepavyko irasyti i faila: " + failoVardas);
+    void writeFile(const std::string& filename, const std::string& content) {
+        std::ofstream file(filename);
+        if (!file) {
+            throw std::runtime_error("Failed to write to file: " + filename);
         }
-        failas << turinys;
+        file << content;
     }
 
-    std::unordered_map<char, double> atliktiDazniuAnalize(const std::string& tekstas) {
-        std::unordered_map<char, double> dazniai;
-        int visoSimboliu = 0;
+    std::unordered_map<char, double> performFrequencyAnalysis(const std::string& text) {
+        std::unordered_map<char, double> frequencies;
+        int totalChars = 0;
 
-        //Supaprastinti tekstą
-        std::string tekstoTiriniui = tekstas;
-        if (tekstas.size() > maxTekstoDydis) {
-            tekstoTiriniui = tekstoTiriniui.substr(0, maxTekstoDydis);
+        // Simplify text
+        std::string textToAnalyze = text;
+        if (text.size() > maxTextSize) {
+            textToAnalyze = textToAnalyze.substr(0, maxTextSize);
         }
 
-         //Nustatyti raidžių dažnumą
-        for (char c : tekstoTiriniui) {
+        // Calculate letter frequencies
+        for (char c : textToAnalyze) {
             if (std::isalpha(c)) {
-                dazniai[std::toupper(c)]++;
-                visoSimboliu++;
+                frequencies[std::toupper(c)]++;
+                totalChars++;
             }
         }
 
-        if (visoSimboliu > 0) {
-            for (auto& pora : dazniai) {
-                pora.second /= visoSimboliu;
+        if (totalChars > 0) {
+            for (auto& pair : frequencies) {
+                pair.second /= totalChars;
             }
         }
 
-        return dazniai;
+        return frequencies;
     }
 
-    std::unordered_map<char, char> sukurtiPradiniRakta(
-        const std::unordered_map<char, double>& dazniai, 
-        int kalbosModelioIndeksas
+    std::unordered_map<char, char> createInitialKey(
+        const std::unordered_map<char, double>& frequencies, 
+        int languageModelIndex
     ) {
-        std::vector<std::pair<char, double>> surikiuotiDazniai(dazniai.begin(), dazniai.end());
-        std::sort(surikiuotiDazniai.begin(), surikiuotiDazniai.end(), 
+        std::vector<std::pair<char, double>> sortedFrequencies(frequencies.begin(), frequencies.end());
+        std::sort(sortedFrequencies.begin(), sortedFrequencies.end(), 
             [](const auto& a, const auto& b) { return a.second > b.second; });
 
-        std::vector<std::pair<std::string, double>> kalbosDazniai;
-        for (const auto& pora : kalbosModeliai[kalbosModelioIndeksas].monogramos) {
-            kalbosDazniai.push_back({pora.first, pora.second});
+        std::vector<std::pair<std::string, double>> languageFrequencies;
+        for (const auto& pair : languageModels[languageModelIndex].monograms) {
+            languageFrequencies.push_back({pair.first, pair.second});
         }
-        std::sort(kalbosDazniai.begin(), kalbosDazniai.end(), 
+        std::sort(languageFrequencies.begin(), languageFrequencies.end(), 
             [](const auto& a, const auto& b) { return a.second > b.second; });
 
-        std::unordered_map<char, char> raktoZemelapis;
-        size_t minDydis = std::min(surikiuotiDazniai.size(), kalbosDazniai.size());
+        std::unordered_map<char, char> keyMapping;
+        size_t minSize = std::min(sortedFrequencies.size(), languageFrequencies.size());
         
-        for (size_t i = 0; i < minDydis; ++i) {
-            raktoZemelapis[surikiuotiDazniai[i].first] = kalbosDazniai[i].first[0];
+        for (size_t i = 0; i < minSize; ++i) {
+            keyMapping[sortedFrequencies[i].first] = languageFrequencies[i].first[0];
         }
 
+        // Fill remaining letters with unused mappings
         for (char c = 'A'; c <= 'Z'; ++c) {
-            if (raktoZemelapis.find(c) == raktoZemelapis.end()) {
+            if (keyMapping.find(c) == keyMapping.end()) {
                 for (char p = 'A'; p <= 'Z'; ++p) {
-                    bool naudotas = false;
-                    for (const auto& pora : raktoZemelapis) {
-                        if (pora.second == p) {
-                            naudotas = true;
+                    bool used = false;
+                    for (const auto& pair : keyMapping) {
+                        if (pair.second == p) {
+                            used = true;
                             break;
                         }
                     }
-                    if (!naudotas) {
-                        raktoZemelapis[c] = p;
+                    if (!used) {
+                        keyMapping[c] = p;
                         break;
                     }
                 }
             }
         }
 
-        return raktoZemelapis;
+        return keyMapping;
     }
 
-    std::string taikytiRakta(const std::string& tekstas, const std::unordered_map<char, char>& raktoZemelapis) {
-        std::string rezultatas;
-        rezultatas.reserve(tekstas.size());
+    std::string applyKey(const std::string& text, const std::unordered_map<char, char>& keyMapping) {
+        std::string result;
+        result.reserve(text.size());
 
-        for (char c : tekstas) {
+        for (char c : text) {
             if (std::isalpha(c)) {
-                char didzioji = std::toupper(c);
-                auto it = raktoZemelapis.find(didzioji);
-                if (it != raktoZemelapis.end()) {
-                    rezultatas += std::islower(c) ? std::tolower(it->second) : it->second;
+                char upper = std::toupper(c);
+                auto it = keyMapping.find(upper);
+                if (it != keyMapping.end()) {
+                    result += std::islower(c) ? std::tolower(it->second) : it->second;
                 } else {
-                    rezultatas += c;
+                    result += c;
                 }
             } else {
-                rezultatas += c; 
+                result += c; 
             }
         }
 
-        return rezultatas;
+        return result;
     }
 
-     //Įvertinti dešifravimo kokybę
-    double ivertintiDesifravima(
-        const std::string& sifruotasTekstas,
-        const std::unordered_map<char, char>& raktoZemelapis,
-        int kalbosModelioIndeksas
+    // Evaluate decryption quality
+    double evaluateDecryption(
+        const std::string& encryptedText,
+        const std::unordered_map<char, char>& keyMapping,
+        int languageModelIndex
     ) {
-        std::string vertinimui = sifruotasTekstas;
-        if (sifruotasTekstas.size() > maxTekstoDydis) {
-            if (konfig.tekstoTyrimoStrategija == 0) {
-                vertinimui = sifruotasTekstas.substr(0, maxTekstoDydis);
+        std::string textToEvaluate = encryptedText;
+        if (encryptedText.size() > maxTextSize) {
+            if (config.textSamplingStrategy == 0) {
+                textToEvaluate = encryptedText.substr(0, maxTextSize);
             } 
-            else if (konfig.tekstoTyrimoStrategija == 1) {
-                size_t pradziosPoz = rng() % (sifruotasTekstas.size() - maxTekstoDydis);
-                vertinimui = sifruotasTekstas.substr(pradziosPoz, maxTekstoDydis);
+            else if (config.textSamplingStrategy == 1) {
+                size_t startPos = rng() % (encryptedText.size() - maxTextSize);
+                textToEvaluate = encryptedText.substr(startPos, maxTextSize);
             }
             else {
-                size_t imtiesDydis = maxTekstoDydis / 3;
-                std::string imtis1 = sifruotasTekstas.substr(0, imtiesDydis);
-                size_t vidurys = sifruotasTekstas.size() / 2 - imtiesDydis / 2;
-                std::string imtis2 = sifruotasTekstas.substr(vidurys, imtiesDydis);
-                size_t pabaiga = sifruotasTekstas.size() - imtiesDydis;
-                std::string imtis3 = sifruotasTekstas.substr(pabaiga, imtiesDydis);
-                vertinimui = imtis1 + imtis2 + imtis3;
+                size_t sampleSize = maxTextSize / 3;
+                std::string sample1 = encryptedText.substr(0, sampleSize);
+                size_t middle = encryptedText.size() / 2 - sampleSize / 2;
+                std::string sample2 = encryptedText.substr(middle, sampleSize);
+                size_t end = encryptedText.size() - sampleSize;
+                std::string sample3 = encryptedText.substr(end, sampleSize);
+                textToEvaluate = sample1 + sample2 + sample3;
             }
         }
 
-        std::string desifruotasTekstas = taikytiRakta(vertinimui, raktoZemelapis);
+        std::string decryptedText = applyKey(textToEvaluate, keyMapping);
 
-        double monogramuIvertis = 0.0;
-        double bigramuIvertis = 0.0;
-        double trigramuIvertis = 0.0;
-        double zodynoIvertis = 0.0;
+        double monogramScore = 0.0;
+        double bigramScore = 0.0;
+        double trigramScore = 0.0;
+        double dictionaryScore = 0.0;
 
-        std::unordered_map<std::string, int> monogramuSk;
-        int visoMonogramu = 0;
+        std::unordered_map<std::string, int> monogramCounts;
+        int totalMonograms = 0;
 
-        for (char c : desifruotasTekstas) {
+        for (char c : decryptedText) {
             if (std::isalpha(c)) {
-                std::string raide(1, std::toupper(c));
-                monogramuSk[raide]++;
-                visoMonogramu++;
+                std::string letter(1, std::toupper(c));
+                monogramCounts[letter]++;
+                totalMonograms++;
             }
         }
 
-        if (visoMonogramu > 0) {
-            for (const auto& pora : monogramuSk) {
-                double daznis = static_cast<double>(pora.second) / visoMonogramu;
-                auto it = kalbosModeliai[kalbosModelioIndeksas].monogramos.find(pora.first);
-                if (it != kalbosModeliai[kalbosModelioIndeksas].monogramos.end()) {
-                    monogramuIvertis += (1.0 - std::abs(daznis - it->second));
+        if (totalMonograms > 0) {
+            for (const auto& pair : monogramCounts) {
+                double frequency = static_cast<double>(pair.second) / totalMonograms;
+                auto it = languageModels[languageModelIndex].monograms.find(pair.first);
+                if (it != languageModels[languageModelIndex].monograms.end()) {
+                    monogramScore += (1.0 - std::abs(frequency - it->second));
                 }
             }
-            monogramuIvertis /= 26.0; 
+            monogramScore /= 26.0; 
         }
 
-        std::unordered_map<std::string, int> bigramuSk;
-        int visoBigramu = 0;
+        std::unordered_map<std::string, int> bigramCounts;
+        int totalBigrams = 0;
 
-        for (size_t i = 1; i < desifruotasTekstas.size(); ++i) {
-            if (std::isalpha(desifruotasTekstas[i-1]) && std::isalpha(desifruotasTekstas[i])) {
-                std::string bigrama;
-                bigrama += std::toupper(desifruotasTekstas[i-1]);
-                bigrama += std::toupper(desifruotasTekstas[i]);
-                bigramuSk[bigrama]++;
-                visoBigramu++;
+        for (size_t i = 1; i < decryptedText.size(); ++i) {
+            if (std::isalpha(decryptedText[i-1]) && std::isalpha(decryptedText[i])) {
+                std::string bigram;
+                bigram += std::toupper(decryptedText[i-1]);
+                bigram += std::toupper(decryptedText[i]);
+                bigramCounts[bigram]++;
+                totalBigrams++;
             }
         }
 
-        if (visoBigramu > 0) {
-            for (const auto& pora : bigramuSk) {
-                auto it = kalbosModeliai[kalbosModelioIndeksas].bigramos.find(pora.first);
-                if (it != kalbosModeliai[kalbosModelioIndeksas].bigramos.end()) {
-                    bigramuIvertis += it->second * pora.second;
+        if (totalBigrams > 0) {
+            for (const auto& pair : bigramCounts) {
+                auto it = languageModels[languageModelIndex].bigrams.find(pair.first);
+                if (it != languageModels[languageModelIndex].bigrams.end()) {
+                    bigramScore += it->second * pair.second;
                 }
             }
-            bigramuIvertis /= visoBigramu;
+            bigramScore /= totalBigrams;
         }
 
-        std::unordered_map<std::string, int> trigramuSk;
-        int visoTrigramu = 0;
+        std::unordered_map<std::string, int> trigramCounts;
+        int totalTrigrams = 0;
 
-        for (size_t i = 2; i < desifruotasTekstas.size(); ++i) {
-            if (std::isalpha(desifruotasTekstas[i-2]) && std::isalpha(desifruotasTekstas[i-1]) && std::isalpha(desifruotasTekstas[i])) {
-                std::string trigrama;
-                trigrama += std::toupper(desifruotasTekstas[i-2]);
-                trigrama += std::toupper(desifruotasTekstas[i-1]);
-                trigrama += std::toupper(desifruotasTekstas[i]);
-                trigramuSk[trigrama]++;
-                visoTrigramu++;
+        for (size_t i = 2; i < decryptedText.size(); ++i) {
+            if (std::isalpha(decryptedText[i-2]) && std::isalpha(decryptedText[i-1]) && std::isalpha(decryptedText[i])) {
+                std::string trigram;
+                trigram += std::toupper(decryptedText[i-2]);
+                trigram += std::toupper(decryptedText[i-1]);
+                trigram += std::toupper(decryptedText[i]);
+                trigramCounts[trigram]++;
+                totalTrigrams++;
             }
         }
 
-        if (visoTrigramu > 0) {
-            for (const auto& pora : trigramuSk) {
-                auto it = kalbosModeliai[kalbosModelioIndeksas].trigramos.find(pora.first);
-                if (it != kalbosModeliai[kalbosModelioIndeksas].trigramos.end()) {
-                    trigramuIvertis += it->second * pora.second;
+        if (totalTrigrams > 0) {
+            for (const auto& pair : trigramCounts) {
+                auto it = languageModels[languageModelIndex].trigrams.find(pair.first);
+                if (it != languageModels[languageModelIndex].trigrams.end()) {
+                    trigramScore += it->second * pair.second;
                 }
             }
-            trigramuIvertis /= visoTrigramu;
+            trigramScore /= totalTrigrams;
         }
 
-        size_t poz = 0;
-        int zodziuSk = 0;
-        int rastuZodziu = 0;
+        size_t pos = 0;
+        int wordCount = 0;
+        int matchedWords = 0;
 
-        while (poz < desifruotasTekstas.size()) {
-            while (poz < desifruotasTekstas.size() && !std::isalpha(desifruotasTekstas[poz])) {
-                poz++;
+        while (pos < decryptedText.size()) {
+            while (pos < decryptedText.size() && !std::isalpha(decryptedText[pos])) {
+                pos++;
             }
             
-            if (poz >= desifruotasTekstas.size()) break;
+            if (pos >= decryptedText.size()) break;
             
-            size_t zodzioPradzia = poz;
-            while (poz < desifruotasTekstas.size() && std::isalpha(desifruotasTekstas[poz])) {
-                poz++;
+            size_t wordStart = pos;
+            while (pos < decryptedText.size() && std::isalpha(decryptedText[pos])) {
+                pos++;
             }
             
-            if (poz > zodzioPradzia) {
-                zodziuSk++;
-                std::string zodis = desifruotasTekstas.substr(zodzioPradzia, poz - zodzioPradzia);
-                std::transform(zodis.begin(), zodis.end(), zodis.begin(), ::tolower);
+            if (pos > wordStart) {
+                wordCount++;
+                std::string word = decryptedText.substr(wordStart, pos - wordStart);
+                std::transform(word.begin(), word.end(), word.begin(), ::tolower);
                 
-                if (kalbosModeliai[kalbosModelioIndeksas].zodynas.find(zodis) != 
-                    kalbosModeliai[kalbosModelioIndeksas].zodynas.end()) {
-                    rastuZodziu++;
+                if (languageModels[languageModelIndex].dictionary.find(word) != 
+                    languageModels[languageModelIndex].dictionary.end()) {
+                    matchedWords++;
                 }
             }
         }
 
-        if (zodziuSk > 0) {
-            zodynoIvertis = static_cast<double>(rastuZodziu) / zodziuSk;
+        if (wordCount > 0) {
+            dictionaryScore = static_cast<double>(matchedWords) / wordCount;
         }
 
-        double bendrasIvertis = 
-            konfig.monogramuSvoris * monogramuIvertis + 
-            konfig.bigramuSvoris * bigramuIvertis + 
-            konfig.trigramuSvoris * trigramuIvertis + 
-            konfig.zodynoSvoris * zodynoIvertis;
+        double totalScore = 
+            config.monogramWeight * monogramScore + 
+            config.bigramWeight * bigramScore + 
+            config.trigramWeight * trigramScore + 
+            config.dictionaryWeight * dictionaryScore;
 
-        bendrasIvertis = bendrasIvertis * 10.0 / (konfig.monogramuSvoris + konfig.bigramuSvoris + 
-                                           konfig.trigramuSvoris + konfig.zodynoSvoris);
+        totalScore = totalScore * 10.0 / (config.monogramWeight + config.bigramWeight + 
+                                           config.trigramWeight + config.dictionaryWeight);
 
-        return bendrasIvertis;
+        return totalScore;
     }
 
-    std::unordered_map<char, char> sukeistiDviRaites(
-        const std::unordered_map<char, char>& raktoZemelapis
+    std::unordered_map<char, char> swapTwoLetters(
+        const std::unordered_map<char, char>& keyMapping
     ) {
-        std::vector<char> raides;
+        std::vector<char> letters;
         
-        for (const auto& pora : raktoZemelapis) {
-            raides.push_back(pora.second);
+        for (const auto& pair : keyMapping) {
+            letters.push_back(pair.second);
         }
         
-        std::uniform_int_distribution<int> dist(0, raides.size() - 1);
-        int poz1 = dist(rng);
-        int poz2;
+        std::uniform_int_distribution<int> dist(0, letters.size() - 1);
+        int pos1 = dist(rng);
+        int pos2;
         do {
-            poz2 = dist(rng);
-        } while (poz1 == poz2);
+            pos2 = dist(rng);
+        } while (pos1 == pos2);
         
-        std::swap(raides[poz1], raides[poz2]);
+        std::swap(letters[pos1], letters[pos2]);
         
-        std::unordered_map<char, char> naujasRaktas;
+        std::unordered_map<char, char> newKey;
         int i = 0;
-        for (const auto& pora : raktoZemelapis) {
-            naujasRaktas[pora.first] = raides[i++];
+        for (const auto& pair : keyMapping) {
+            newKey[pair.first] = letters[i++];
         }
         
-        return naujasRaktas;
+        return newKey;
     }
 
-    std::unordered_map<char, char> kopimuKala(
-        const std::string& sifruotasTekstas,
-        const std::unordered_map<char, char>& pradinisRaktas,
-        int kalbosModelioIndeksas
+    std::unordered_map<char, char> hillClimbing(
+        const std::string& encryptedText,
+        const std::unordered_map<char, char>& initialKey,
+        int languageModelIndex
     ) {
-        auto geriausiasRaktas = pradinisRaktas;
-        double geriausiasIvertis = ivertintiDesifravima(sifruotasTekstas, geriausiasRaktas, kalbosModelioIndeksas);
+        auto bestKey = initialKey;
+        double bestScore = evaluateDecryption(encryptedText, bestKey, languageModelIndex);
         
-        int iteracijos = 0;
-        int bePagerinimo = 0;
+        int iterations = 0;
+        int noImprovementCount = 0;
         
-        while (iteracijos < maxVisoIteraciju && 
-               bePagerinimo < maxIteracijuBePagerinimo &&
-               !stabdymas) {
+        while (iterations < maxTotalIterations && 
+               noImprovementCount < maxIterationsWithoutImprovement &&
+               !stopFlag) {
             
-            auto naujasRaktas = sukeistiDviRaites(geriausiasRaktas);
-            double naujasIvertis = ivertintiDesifravima(sifruotasTekstas, naujasRaktas, kalbosModelioIndeksas);
+            auto newKey = swapTwoLetters(bestKey);
+            double newScore = evaluateDecryption(encryptedText, newKey, languageModelIndex);
             
-            if (naujasIvertis > geriausiasIvertis) {
-                geriausiasRaktas = naujasRaktas;
-                geriausiasIvertis = naujasIvertis;
-                bePagerinimo = 0;
+            if (newScore > bestScore) {
+                bestKey = newKey;
+                bestScore = newScore;
+                noImprovementCount = 0;
                 
-                if (konfig.detalusIsvedimas && iteracijos % 100 == 0) {
-                    std::cout << "Pagerintas ivertinimas: " << geriausiasIvertis << " iteracijoje " << iteracijos << std::endl;
+                if (config.verboseOutput && iterations % 100 == 0) {
+                    std::cout << "Improved score: " << bestScore << " at iteration " << iterations << std::endl;
                 }
             } else {
-                bePagerinimo++;
+                noImprovementCount++;
             }
             
-            iteracijos++;
+            iterations++;
         }
         
-        if (konfig.detalusIsvedimas) {
-            std::cout << "Kopimu kala baigta po " << iteracijos << " iteraciju" << std::endl;
-            std::cout << "Galutinis ivertinimas: " << geriausiasIvertis << std::endl;
+        if (config.verboseOutput) {
+            std::cout << "Hill climbing completed after " << iterations << " iterations" << std::endl;
+            std::cout << "Final score: " << bestScore << std::endl;
         }
         
-        return geriausiasRaktas;
+        return bestKey;
     }
 
-    std::unordered_map<char, char> simuliatoriusAtleidimo(
-        const std::string& sifruotasTekstas,
-        const std::unordered_map<char, char>& pradinisRaktas,
-        int kalbosModelioIndeksas
+    std::unordered_map<char, char> simulatedAnnealing(
+        const std::string& encryptedText,
+        const std::unordered_map<char, char>& initialKey,
+        int languageModelIndex
     ) {
-        auto dabartinisRaktas = pradinisRaktas;
-        double dabartinisIvertis = ivertintiDesifravima(sifruotasTekstas, dabartinisRaktas, kalbosModelioIndeksas);
+        auto currentKey = initialKey;
+        double currentScore = evaluateDecryption(encryptedText, currentKey, languageModelIndex);
         
-        auto geriausiasRaktas = dabartinisRaktas;
-        double geriausiasIvertis = dabartinisIvertis;
+        auto bestKey = currentKey;
+        double bestScore = currentScore;
         
-        int iteracijos = 0;
-        double temperatura = pradineTemperatura;
-        double atvesimoGreitis = std::pow(galutineTemperatura / pradineTemperatura, 1.0 / maxVisoIteraciju);
+        int iterations = 0;
+        double temperature = initialTemperature;
+        double coolingRate = std::pow(finalTemperature / initialTemperature, 1.0 / maxTotalIterations);
         
-        while (iteracijos < maxVisoIteraciju && temperatura > galutineTemperatura && !stabdymas) {
-            auto naujasRaktas = sukeistiDviRaites(dabartinisRaktas);
-            double naujasIvertis = ivertintiDesifravima(sifruotasTekstas, naujasRaktas, kalbosModelioIndeksas);
+        while (iterations < maxTotalIterations && temperature > finalTemperature && !stopFlag) {
+            auto newKey = swapTwoLetters(currentKey);
+            double newScore = evaluateDecryption(encryptedText, newKey, languageModelIndex);
             
-            if (naujasIvertis > dabartinisIvertis) {
-                dabartinisRaktas = naujasRaktas;
-                dabartinisIvertis = naujasIvertis;
+            if (newScore > currentScore) {
+                currentKey = newKey;
+                currentScore = newScore;
                 
-                if (dabartinisIvertis > geriausiasIvertis) {
-                    geriausiasRaktas = dabartinisRaktas;
-                    geriausiasIvertis = dabartinisIvertis;
+                if (currentScore > bestScore) {
+                    bestKey = currentKey;
+                    bestScore = currentScore;
                     
-                    if (konfig.detalusIsvedimas && iteracijos % 100 == 0) {
-                        std::cout << "Naujas geriausias ivertinimas: " << geriausiasIvertis 
-                                  << " iteracijoje " << iteracijos 
-                                  << ", temp: " << temperatura << std::endl;
+                    if (config.verboseOutput && iterations % 100 == 0) {
+                        std::cout << "New best score: " << bestScore 
+                                  << " at iteration " << iterations 
+                                  << ", temp: " << temperature << std::endl;
                     }
                 }
             } 
             else {
-                double skirtumas = naujasIvertis - dabartinisIvertis;
-                double priemimoTikimybe = std::exp(skirtumas / temperatura);
+                double difference = newScore - currentScore;
+                double acceptanceProbability = std::exp(difference / temperature);
                 std::uniform_real_distribution<double> dist(0.0, 1.0);
                 
-                if (dist(rng) < priemimoTikimybe) {
-                    dabartinisRaktas = naujasRaktas;
-                    dabartinisIvertis = naujasIvertis;
+                if (dist(rng) < acceptanceProbability) {
+                    currentKey = newKey;
+                    currentScore = newScore;
                 }
             }
             
-            temperatura *= atvesimoGreitis;
-            iteracijos++;
+            temperature *= coolingRate;
+            iterations++;
         }
         
-        if (konfig.detalusIsvedimas) {
-            std::cout << "Simuliatorius atleidimo baigtas po " << iteracijos << " iteraciju" << std::endl;
-            std::cout << "Galutinis geriausias ivertinimas: " << geriausiasIvertis << std::endl;
+        if (config.verboseOutput) {
+            std::cout << "Simulated annealing completed after " << iterations << " iterations" << std::endl;
+            std::cout << "Final best score: " << bestScore << std::endl;
         }
         
-        return geriausiasRaktas;
+        return bestKey;
     }
 
-    std::unordered_map<char, char> genetinisAlgoritmas(
-        const std::string& sifruotasTekstas,
-        const std::unordered_map<char, char>& pradinisRaktas,
-        int kalbosModelioIndeksas
+    std::unordered_map<char, char> geneticAlgorithm(
+        const std::string& encryptedText,
+        const std::unordered_map<char, char>& initialKey,
+        int languageModelIndex
     ) {
-        return pradinisRaktas;
+        return initialKey;
     }
 
-    std::unordered_map<char, char> optimizuotiRakta(
-        const std::string& sifruotasTekstas,
-        const std::unordered_map<char, char>& pradinisRaktas,
-        int kalbosModelioIndeksas
+    std::unordered_map<char, char> optimizeKey(
+        const std::string& encryptedText,
+        const std::unordered_map<char, char>& initialKey,
+        int languageModelIndex
     ) {
-        std::vector<std::thread> gijos;
-        std::vector<std::unordered_map<char, char>> rezultatai;
-        std::vector<double> ivertinimai;
-        std::mutex rezultatuMutex;
+        std::vector<std::thread> threads;
+        std::vector<std::unordered_map<char, char>> results;
+        std::vector<double> scores;
+        std::mutex resultsMutex;
         
-        rezultatai.resize(konfig.gijuSk);
-        ivertinimai.resize(konfig.gijuSk, 0.0);
+        results.resize(config.threadCount);
+        scores.resize(config.threadCount, 0.0);
         
-        for (int i = 0; i < konfig.gijuSk; ++i) {
-            gijos.emplace_back([this, i, &sifruotasTekstas, &pradinisRaktas, 
-                                 kalbosModelioIndeksas, &rezultatai, &ivertinimai, &rezultatuMutex]() {
-                std::unordered_map<char, char> geriausiasRaktas;
-                double geriausiasIvertis = 0.0;
+        for (int i = 0; i < config.threadCount; ++i) {
+            threads.emplace_back([this, i, &encryptedText, &initialKey, 
+                                 languageModelIndex, &results, &scores, &resultsMutex]() {
+                std::unordered_map<char, char> bestKey;
+                double bestScore = 0.0;
                 
-                if (i % 3 == 0 && konfig.naudotiKopimuKala) {
-                    geriausiasRaktas = kopimuKala(sifruotasTekstas, pradinisRaktas, kalbosModelioIndeksas);
-                    geriausiasIvertis = ivertintiDesifravima(sifruotasTekstas, geriausiasRaktas, kalbosModelioIndeksas);
+                if (i % 3 == 0 && config.useHillClimbing) {
+                    bestKey = hillClimbing(encryptedText, initialKey, languageModelIndex);
+                    bestScore = evaluateDecryption(encryptedText, bestKey, languageModelIndex);
                 } 
-                else if (i % 3 == 1 && konfig.naudotiSimuliuotaAtleidima) {
-                    geriausiasRaktas = simuliatoriusAtleidimo(sifruotasTekstas, pradinisRaktas, kalbosModelioIndeksas);
-                    geriausiasIvertis = ivertintiDesifravima(sifruotasTekstas, geriausiasRaktas, kalbosModelioIndeksas);
+                else if (i % 3 == 1 && config.useSimulatedAnnealing) {
+                    bestKey = simulatedAnnealing(encryptedText, initialKey, languageModelIndex);
+                    bestScore = evaluateDecryption(encryptedText, bestKey, languageModelIndex);
                 }
-                else if (konfig.naudotiGenetiniAlgoritma) {
-                    geriausiasRaktas = genetinisAlgoritmas(sifruotasTekstas, pradinisRaktas, kalbosModelioIndeksas);
-                    geriausiasIvertis = ivertintiDesifravima(sifruotasTekstas, geriausiasRaktas, kalbosModelioIndeksas);
+                else if (config.useGeneticAlgorithm) {
+                    bestKey = geneticAlgorithm(encryptedText, initialKey, languageModelIndex);
+                    bestScore = evaluateDecryption(encryptedText, bestKey, languageModelIndex);
                 }
                 else {
-                    geriausiasRaktas = kopimuKala(sifruotasTekstas, pradinisRaktas, kalbosModelioIndeksas);
-                    geriausiasIvertis = ivertintiDesifravima(sifruotasTekstas, geriausiasRaktas, kalbosModelioIndeksas);
+                    bestKey = hillClimbing(encryptedText, initialKey, languageModelIndex);
+                    bestScore = evaluateDecryption(encryptedText, bestKey, languageModelIndex);
                 }
                 
-                std::lock_guard<std::mutex> lock(rezultatuMutex);
-                rezultatai[i] = geriausiasRaktas;
-                ivertinimai[i] = geriausiasIvertis;
+                std::lock_guard<std::mutex> lock(resultsMutex);
+                results[i] = bestKey;
+                scores[i] = bestScore;
             });
         }
         
-        for (auto& gija : gijos) {
-            if (gija.joinable()) {
-                gija.join();
+        for (auto& thread : threads) {
+            if (thread.joinable()) {
+                thread.join();
             }
         }
         
-        int geriausiasIndeksas = 0;
-        double geriausiasIvertis = ivertinimai[0];
+        int bestIndex = 0;
+        double bestScore = scores[0];
         
-        for (int i = 1; i < ivertinimai.size(); ++i) {
-            if (ivertinimai[i] > geriausiasIvertis) {
-                geriausiasIvertis = ivertinimai[i];
-                geriausiasIndeksas = i;
+        for (int i = 1; i < scores.size(); ++i) {
+            if (scores[i] > bestScore) {
+                bestScore = scores[i];
+                bestIndex = i;
             }
         }
         
-        if (konfig.detalusIsvedimas) {
-            std::cout << "Geriausias optimizavimo rezultatas: " << geriausiasIvertis << std::endl;
+        if (config.verboseOutput) {
+            std::cout << "Best optimization result: " << bestScore << std::endl;
         }
         
-        return rezultatai[geriausiasIndeksas];
+        return results[bestIndex];
     }
 };
 
 int main(int argc, char* argv[]) {
-    std::string ivestiesFailas = "uzsifruotastekstas.txt";
-    std::string isvestiesFailas = "tikrastekstas.txt";
-    bool detalusIsvedimas = false;
-    int gijos = std::thread::hardware_concurrency();
+    std::string inputFile = "encryptedtext.txt";
+    std::string outputFile = "decryptedtext.txt";
+    bool verboseOutput = false;
+    int threads = std::thread::hardware_concurrency();
     
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "-i" || arg == "--input") {
             if (i + 1 < argc) {
-                ivestiesFailas = argv[++i];
+                inputFile = argv[++i];
             }
         } else if (arg == "-o" || arg == "--output") {
             if (i + 1 < argc) {
-                isvestiesFailas = argv[++i];
+                outputFile = argv[++i];
             }
         } else if (arg == "-v" || arg == "--verbose") {
-            detalusIsvedimas = true;
+            verboseOutput = true;
         } else if (arg == "-t" || arg == "--threads") {
             if (i + 1 < argc) {
-                gijos = std::stoi(argv[++i]);
+                threads = std::stoi(argv[++i]);
             }
         } else if (arg == "-h" || arg == "--help") {
-            std::cout << "Naudojimas: " << argv[0] << " [parinktys]" << std::endl;
-            std::cout << "Parinktys:" << std::endl;
-            std::cout << "  -i, --input FAILAS    Įvesties užšifruotas failas (numatytasis: uzsifruotastekstas.txt)" << std::endl;
-            std::cout << "  -o, --output FAILAS   Išvesties dešifruotas failas (numatytasis: tikrastekstas.txt)" << std::endl;
+            std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
+            std::cout << "Options:" << std::endl;
+            std::cout << "  -i, --input FILE    Input encrypted file (default: encryptedtext.txt)" << std::endl;
+            std::cout << "  -o, --output FILE   Output decrypted file (default: decryptedtext.txt)" << std::endl;
+            std::cout << "  -v, --verbose       Enable verbose output" << std::endl;
+            std::cout << "  -t, --threads N     Set number of threads to use" << std::endl;
+            std::cout << "  -h, --help          Show this help message" << std::endl;
             return 0;
         }
     }
     
     try {
-        SubstitutionCipherSolver desifratorius;
+        SubstitutionCipherSolver decryptor;
         
-        auto konfig = desifratorius.gautiKonfiguracija();
-        konfig.detalusIsvedimas = detalusIsvedimas;
-        konfig.gijuSk = gijos;
-        desifratorius.nustatytiKonfiguracija(konfig);
+        auto config = decryptor.getConfiguration();
+        config.verboseOutput = verboseOutput;
+        config.threadCount = threads;
+        decryptor.setConfiguration(config);
         
-        std::string desifruotasTekstas = desifratorius.desifruotiFaila(ivestiesFailas, isvestiesFailas);
+        std::string decryptedText = decryptor.decryptFile(inputFile, outputFile);
         
-        if (detalusIsvedimas) {
-            size_t perziurosIlgis = std::min(desifruotasTekstas.size(), size_t(500));
-            std::cout << "\nDesifruoto teksto perziura:\n" << desifruotasTekstas.substr(0, perziurosIlgis) << "..." << std::endl;
+        if (verboseOutput) {
+            size_t previewLength = std::min(decryptedText.size(), size_t(500));
+            std::cout << "\nDecrypted text preview:\n" << decryptedText.substr(0, previewLength) << "..." << std::endl;
         } else {
-            std::cout << "Desifravimas baigtas sekmingai. Rezultatas irasytas i " << isvestiesFailas << std::endl;
+            std::cout << "Decryption completed successfully. Result written to " << outputFile << std::endl;
         }
         
         return 0;
     }
     catch (const std::exception& e) {
-        std::cerr << "Klaida: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
 }
