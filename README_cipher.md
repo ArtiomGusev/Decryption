@@ -72,7 +72,7 @@ g++ desifravimas_su_raktu.cpp -o decipher -std=c++17 -pthread
 ## 👤 Author
 
 - **Artiom Gusev**
-- GitHub: [https://github.com/yourusername](https://github.com/ArtiomGusev)
+- GitHub: [https://github.com/ArtiomGusev](https://github.com/ArtiomGusev)
 
 ---
 
